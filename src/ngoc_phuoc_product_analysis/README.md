@@ -1,28 +1,10 @@
-# Nhiệm vụ: Ngọc Phước - Phân tích Sản phẩm & Khách hàng
+# Nhiệm vụ: Ngọc Phước - Phân tích Sản phẩm & Khách hàng (ĐÃ HOÀN THÀNH ✅)
 
 ## 👤 Thành viên: Ngọc Phước
 - **Vai trò chính:** Phân tích Sản phẩm & Khách hàng
-- **Nhiệm vụ (KPI) lõi:** Trực quan mặt hàng bán chạy, danh mục.
+- **Nhiệm vụ (KPI) lõi:** Trả lời câu hỏi *"Sản phẩm nào mang lại doanh thu cao?"*
 
----
-
-## 🎯 Mục tiêu chi tiết (Tuần 1 - Tuần 2)
-1. Sử dụng dữ liệu sạch từ thư mục chung `data/clean/` (do Tân Lê cung cấp).
-2. Trực quan hóa và trả lời trọn vẹn câu hỏi lớn: **"Sản phẩm nào mang lại doanh thu cao?"**
-   - Xây dựng bảng xếp hạng Top 10 sản phẩm đạt doanh số cao nhất (Cash cows).
-   - Phân tích cơ cấu và tỷ trọng doanh thu theo từng Danh mục sản phẩm (Coffee, Tea, Bakery,...).
-   - Phân tích tương quan giữa Đơn giá (Price) và Khối lượng bán (Volume/Quantity) để phân loại sản phẩm bán lẻ số lượng lớn vs sản phẩm cao cấp.
-3. Đóng gói các hàm vẽ biểu đồ Plotly vào `product_charts.py` để Tân Lưu nhúng vào Tab 2 của Dashboard.
-
----
-
-## 📋 Checklist công việc
-
-- [ ] **Bước 1:** Khảo sát dữ liệu sản phẩm và danh mục trên notebook nháp `notebook/EDA_and_Testing.ipynb`.
-- [ ] **Bước 2:** Hoàn thiện code các hàm trong `product_charts.py`:
-  - `plot_top_products_by_revenue(df, top_n=10)`: Biểu đồ thanh ngang Top 10 sản phẩm doanh thu cao nhất.
-  - `plot_revenue_by_category(df)`: Biểu đồ Donut/Pie phân tích tỷ trọng danh mục.
-  - `plot_price_vs_volume(df)`: Biểu đồ phân tán (Scatter plot) giữa Đơn giá và Sản lượng bán.
-- [ ] **Bước 3:** Bàn giao các hàm này cho Tân Lưu để tích hợp lên Dashboard Streamlit.
-- [ ] **Bước 4:** Cung cấp thông tin insight về sản phẩm cho báo cáo chung.
-
+## 📋 Checklist Hoàn Thành
+- [x] **Bước 1:** Phân tích cơ cấu 9 danh mục (`get_category_share_data`, `plot_revenue_by_category`) — Xác định Coffee (38.63%) và Tea (28.11%) chiếm 66.74% tổng thu; Top 4 danh mục chiếm 88.88%.
+- [x] **Bước 2:** Xếp hạng Top 10 món chủ lực (`get_top_products_data`, `plot_top_products_by_revenue`) — Dẫn đầu là Sustainably Grown Organic Lg ($21,151.75) và Dark chocolate Lg ($21,006.00).
+- [x] **Bước 3:** Phân tích Ma trận Đơn giá vs Sản lượng (`get_price_volume_data`, `plot_price_vs_volume`) và hiệu suất 3 chi nhánh (`get_store_performance_data`).

@@ -3,14 +3,17 @@ Quốc Thái: Phân tích Doanh thu & Chuỗi thời gian (Time-Series Charts)
 =====================================================================
 File: src/quoc_thai_time_series/time_series_charts.py
 Nhiệm vụ: Trả lời câu hỏi "Thời điểm nào bán chạy?"
+- Cung cấp các hàm vẽ biểu đồ Plotly (EDA & Notebook & Báo cáo)
+- Cung cấp các hàm trích xuất dữ liệu JSON (cho Flask Dashboard)
 """
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Bảng màu chuẩn theo doc
+# Bảng màu chuẩn theo thiết kế Gentelella v4 Dark Mode
 COLORS = {
     "canvas": "#0B0F19",
     "card": "#151D2F",
@@ -26,7 +29,118 @@ COLORS = {
 DAY_ORDER = [
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
 ]
+ORDER_DAYS_VN = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"]
+ORDER_DAYS_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+
+# ==============================================================================
+# 1. HÀM TRÍCH XUẤT DỮ LIỆU JSON (PHỤC VỤ FLASK REST API CHO DASHBOARD)
+# ==============================================================================
+
+def get_hourly_sales_data(df: pd.DataFrame) -> dict:
+    """Tổng hợp doanh thu & sản lượng theo 24 khung giờ."""
+    if df.empty:
+        return {"labels": [f"{h:02d}h" for h in range(6, 21)], "revenue": [0] * 15, "quantity": [0] * 15}
+
+    hours = list(range(6, 21))
+    hourly = (
+        df.groupby("hour", as_index=False)
+        .agg(revenue=("revenue", "sum"), quantity=("quantity", "sum"))
+    )
+    hourly_indexed = hourly.set_index("hour").reindex(hours, fill_value=0).reset_index()
+
+    return {
+        "labels": [f"{h:02d}h" for h in hourly_indexed["hour"]],
+        "revenue": [round(float(v), 2) for v in hourly_indexed["revenue"]],
+        "quantity": [int(v) for v in hourly_indexed["quantity"]]
+    }
+
+
+def get_weekly_sales_data(df: pd.DataFrame) -> dict:
+    """Tổng hợp doanh thu & sản lượng theo thứ trong tuần (Thứ 2 -> Chủ Nhật)."""
+    if df.empty:
+        return {"labels": ORDER_DAYS_VN, "revenue": [0] * 7, "quantity": [0] * 7}
+
+    weekly = (
+        df.groupby("day_name", as_index=False)
+        .agg(revenue=("revenue", "sum"), quantity=("quantity", "sum"))
+    )
+    weekly_indexed = weekly.set_index("day_name").reindex(ORDER_DAYS_EN, fill_value=0).reset_index()
+
+    return {
+        "labels": ORDER_DAYS_VN,
+        "revenue": [round(float(v), 2) for v in weekly_indexed["revenue"]],
+        "quantity": [int(v) for v in weekly_indexed["quantity"]]
+    }
+
+
+def get_heatmap_data(df: pd.DataFrame) -> dict:
+    """Tạo ma trận nhiệt 2 chiều: 7 Thứ trong tuần x 15 Khung giờ (6h - 20h)."""
+    hours = list(range(6, 21))
+    if df.empty:
+        return {
+            "days": ORDER_DAYS_VN,
+            "hours": [f"{h:02d}h" for h in hours],
+            "matrix": [[0.0 for _ in hours] for _ in ORDER_DAYS_VN],
+            "max_value": 0.0
+        }
+
+    pivot = df.pivot_table(
+        index="day_name",
+        columns="hour",
+        values="revenue",
+        aggfunc="sum",
+        fill_value=0.0
+    )
+    pivot = pivot.reindex(index=ORDER_DAYS_EN, columns=hours, fill_value=0.0)
+    matrix = np.round(pivot.values, 2).tolist()
+    max_val = float(np.max(pivot.values)) if pivot.values.size > 0 else 0.0
+
+    return {
+        "days": ORDER_DAYS_VN,
+        "hours": [f"{h:02d}h" for h in hours],
+        "matrix": matrix,
+        "max_value": round(max_val, 2)
+    }
+
+
+def get_monthly_trend_data(df: pd.DataFrame) -> dict:
+    """Tổng hợp xu hướng doanh thu theo tháng."""
+    if df.empty:
+        return {"labels": [], "revenue": [], "quantity": []}
+
+    monthly = (
+        df.groupby("month_year", as_index=False)
+        .agg(revenue=("revenue", "sum"), quantity=("quantity", "sum"))
+        .sort_values("month_year")
+    )
+    return {
+        "labels": [f"Tháng {m[5:]}/{m[:4]}" for m in monthly["month_year"]],
+        "revenue": [round(float(v), 2) for v in monthly["revenue"]],
+        "quantity": [int(v) for v in monthly["quantity"]]
+    }
+
+
+def get_daily_trend_data(df: pd.DataFrame) -> dict:
+    """Tổng hợp xu hướng doanh thu theo từng ngày giao dịch."""
+    if df.empty:
+        return {"labels": [], "revenue": [], "quantity": []}
+
+    daily = (
+        df.groupby("transaction_date", as_index=False)
+        .agg(revenue=("revenue", "sum"), quantity=("quantity", "sum"))
+        .sort_values("transaction_date")
+    )
+    return {
+        "labels": [str(d) for d in daily["transaction_date"]],
+        "revenue": [round(float(v), 2) for v in daily["revenue"]],
+        "quantity": [int(v) for v in daily["quantity"]]
+    }
+
+
+# ==============================================================================
+# 2. HÀM VẼ BIỂU ĐỒ PLOTLY CHUẨN GENTELELLA V4 DARK MODE
+# ==============================================================================
 
 def _apply_gentelella_layout(
     fig: go.Figure,
@@ -36,16 +150,7 @@ def _apply_gentelella_layout(
     """
     Helper nội bộ: Áp dụng theme Dark Mode chuẩn Gentelella v4 cho mọi biểu đồ.
     Gọi hàm này ở cuối mỗi hàm plot_* trước khi return fig.
-
-    Tham số:
-        fig           – Figure Plotly cần áp dụng style.
-        title_text    – Tiêu đề chính (in đậm, trắng).
-        subtitle_text – Tiêu đề phụ (nhỏ hơn, màu xám muted).
-
-    Trả về:
-        fig đã được cập nhật layout.
     """
-    # --- Ghép tiêu đề chính + phụ thành 1 chuỗi HTML Plotly ---
     full_title = f"<b>{title_text}</b>"
     if subtitle_text:
         full_title += (
@@ -54,19 +159,15 @@ def _apply_gentelella_layout(
         )
 
     fig.update_layout(
-        # Tiêu đề
         title={
             "text": full_title,
             "font": {"size": 16, "color": COLORS["text_primary"]},
             "x": 0.02,
             "xanchor": "left",
         },
-        # Màu nền chuẩn Gentelella v4 Dark Mode
-        paper_bgcolor=COLORS["card"],    # #151D2F – nền khung biểu đồ
-        plot_bgcolor=COLORS["canvas"],   # #0B0F19 – nền vùng vẽ bên trong
-        # Font chữ toàn bộ
+        paper_bgcolor=COLORS["card"],
+        plot_bgcolor=COLORS["canvas"],
         font={"color": COLORS["text_primary"], "family": "Inter, sans-serif"},
-        # Chú thích (legend)
         legend={
             "orientation": "h",
             "yanchor": "bottom",
@@ -76,9 +177,7 @@ def _apply_gentelella_layout(
             "font": {"color": COLORS["text_secondary"], "size": 11},
             "bgcolor": "rgba(0,0,0,0)",
         },
-        # Margin thoáng
         margin={"l": 50, "r": 30, "t": 70, "b": 50},
-        # Hover tooltip style
         hoverlabel={
             "bgcolor": COLORS["card"],
             "bordercolor": COLORS["grid"],
@@ -86,7 +185,6 @@ def _apply_gentelella_layout(
         },
     )
 
-    # Trục X & Y: lưới mảnh màu grid
     fig.update_xaxes(
         gridcolor=COLORS["grid"],
         linecolor=COLORS["grid"],
@@ -119,7 +217,6 @@ def plot_hourly_sales(df: pd.DataFrame):
     peak_hours = {8, 9, 10}
     peak_share = hourly.loc[hourly["hour"].isin(peak_hours), "revenue"].sum() / total_rev * 100
 
-    #Pre-attentive color: chỉ tô màu xanh ngọc cho khung giờ vàn 8h-10h
     bar_colors = [
         COLORS["green"] if h in peak_hours else COLORS["muted_bar"]
         for h in hourly["hour"]
@@ -142,129 +239,153 @@ def plot_hourly_sales(df: pd.DataFrame):
         go.Scatter(
             x=hour_labels,
             y=hourly["quantity"],
-            name="Sản lượng (món/ly)",
+            name="Sản lượng (ly)",
             mode="lines+markers",
             line={"color": COLORS["cyan"], "width": 2.5},
             marker={"size": 6, "color": COLORS["cyan"]},
-            hovertemplate="Sản lượng: %{y:,} món<extra></extra>",
+            hovertemplate="Sản lượng: %{y:,} ly<extra></extra>",
         ),
         secondary_y=True,
     )
 
+    fig.add_annotation(
+        x="09h",
+        y=hourly.loc[hourly["hour"] == 9, "revenue"].values[0],
+        text=f"Khung giờ vàng 8h-10h<br><b>{peak_share:.1f}%</b> tổng doanh thu",
+        showarrow=True,
+        arrowhead=2,
+        arrowcolor=COLORS["green"],
+        arrowsize=1,
+        arrowwidth=1.5,
+        ax=40,
+        ay=-50,
+        font={"color": COLORS["green"], "size": 11},
+        bgcolor=COLORS["card"],
+        bordercolor=COLORS["green"],
+        borderwidth=1,
+        borderpad=4,
+    )
+
     _apply_gentelella_layout(
         fig,
-        title_text=f"Khung giờ vàng 08h-10h đó góp {peak_share:.1f}% tổng doanh thu",
-        subtitle_text="Đỉnh cao điểm rơi vào 10h sáng ($88.7k); doanh thu giảm gần 50% từ sau 11h trưa",
+        title_text="Doanh thu & Sản lượng theo Khung giờ",
+        subtitle_text="Đỉnh điểm 8h–10h sáng chiếm gần 1/3 doanh thu cả ngày",
     )
-    fig.update_yaxes(
-        title_text="Doanh thu ($)",
-        tickprefix="$",
-        tickfont={"color":COLORS["green"]},
-        secondary_y=False
-    )
-    fig.update_yaxes(
-        title_text="Sản lượng (món/ly)",
-        showgrid=False, # tắt lưới trục phụ để tránh rối
-        secondary_y=True
+    fig.update_layout(
+        xaxis_title="Khung giờ trong ngày",
+        yaxis_title="Doanh thu ($)",
+        yaxis={"tickprefix": "$"},
+        yaxis2={
+            "title": "Sản lượng (ly)",
+            "overlaying": "y",
+            "side": "right",
+            "showgrid": False,
+            "tickfont": {"color": COLORS["cyan"]},
+            "title_font": {"color": COLORS["cyan"]},
+        },
     )
     return fig
 
 
 def plot_sales_by_day_of_week(df: pd.DataFrame):
     """
-    Biểu đồ cột so sánh doanh thu theo Thứ trong tuần (Monday -> Sunday).
+    Biểu đồ cột so sánh Doanh thu theo Thứ trong tuần (Monday -> Sunday).
     """
-    dow = (
-        df.groupby("day_name",as_index=False)
-        .agg(
-            revenue=("revenue", "sum"),
-            active_days=("transaction_date", "nunique"),
-        )
+    weekly = (
+        df.groupby("day_name", as_index=False)
+        .agg(revenue=("revenue", "sum"), quantity=("quantity", "sum"))
     )
-    #Cố định trục X theo thứ tự từ thứ 2 đến CN
-    dow["day_name"] = pd.Categorical(dow["day_name"], categories=DAY_ORDER, ordered=True)
-    dow = dow.sort_values("day_name").reset_index(drop=True)
-    dow["avg_daily"] = dow["revenue"] / dow["active_days"]
 
-    max_rev = dow["revenue"].max()
-    #Tô điểm nhấn Amber cho ngày cao nhất, Cyan cho ngày thường, xám xanh cho cuối tuần
-    bar_colors=[
-        COLORS["amber"] if rev == max_rev
-        else ("#334155" if day in {"Saturday", "Sunday"} else COLORS["cyan"])
-        for day, rev in zip(dow["day_name"], dow["revenue"])
+    weekly["day_name"] = pd.Categorical(weekly["day_name"], categories=DAY_ORDER, ordered=True)
+    weekly = weekly.sort_values("day_name").reset_index(drop=True)
+
+    avg_revenue = weekly["revenue"].mean()
+    max_day = weekly.loc[weekly["revenue"].idxmax(), "day_name"]
+
+    bar_colors = [
+        COLORS["green"] if d == max_day else COLORS["muted_bar"]
+        for d in weekly["day_name"]
     ]
 
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=dow["day_name"],
-                y=dow["revenue"],
-                marker_color=bar_colors,
-                text=[f"${r/1000:.1f}k" for r in dow["revenue"]],
-                textposition="outside",
-                textfont={"color": COLORS["text_primary"], "size": 11},
-                customdata=dow[["active_days", "avg_daily"]],
-                hovertemplate=(
-                    "<b>%{x}</b><br>"
-                    "Tổng doanh thu: $%{y:,.2f}<br>"
-                    "Số ngày mở cửa: %{customdata[0]} ngày<br>"
-                    "TB mỗi ngày: $%{customdata[1]:,.2f}<extra></extra>"
-                ),
-            )
-        ]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=weekly["day_name"],
+            y=weekly["revenue"],
+            name="Doanh thu ngày",
+            marker_color=bar_colors,
+            text=weekly["revenue"].apply(lambda v: f"${v:,.0f}"),
+            textposition="outside",
+            textfont={"color": COLORS["text_secondary"], "size": 11},
+            hovertemplate="<b>%{x}</b><br>Doanh thu: $%{y:,.2f}<extra></extra>",
+        )
     )
+
+    fig.add_hline(
+        y=avg_revenue,
+        line_dash="dash",
+        line_color=COLORS["amber"],
+        line_width=1.5,
+        annotation_text=f"Trung bình: ${avg_revenue:,.0f}/ngày",
+        annotation_position="top right",
+        annotation_font={"color": COLORS["amber"], "size": 11},
+    )
+
     _apply_gentelella_layout(
         fig,
-        title_text="Sức mua duy trì ổn định quanh $97k–$102k xuyên suốt cả tuần",
-        subtitle_text="Thứ 2 dẫn đầu ($101.7k); Thứ 7 thấp hơn về tổng ($96.9k) do ít hơn 1 ngày mở cửa",
+        title_text="Doanh thu theo Thứ trong tuần",
+        subtitle_text=f"Doanh thu phân bổ đồng đều các ngày trong tuần; {max_day} đạt cao nhất",
     )
-    fig.update_yaxes(title_text="Tổng doanh thu ($)", tickprefix="$")
+    fig.update_layout(
+        xaxis_title="Thứ trong tuần",
+        yaxis_title="Doanh thu ($)",
+        yaxis={"tickprefix": "$", "range": [0, weekly["revenue"].max() * 1.18]},
+        showlegend=False,
+    )
     return fig
 
 
 def plot_sales_heatmap(df: pd.DataFrame):
     """
-    [Quốc Thái] Tuần 2: Ma trận nhiệt (Heatmap) giao thoa Ngày trong tuần × Khung giờ.
-
-    - Đầu vào : DataFrame sạch có cột 'day_name', 'hour', 'revenue', 'quantity'.
-    - Đầu ra  : Figure Plotly (go.Heatmap).
-    - Thông điệp: Định vị chính xác tọa độ thời gian cao điểm nhất trong tuần —
-                  trả lời "Khung giờ nào trong ngày nào đông khách nhất?".
-
-    Insight được mã hoá trực quan:
-      · Màu càng sáng (Emerald Glow) = doanh thu/sản lượng càng cao.
-      · Tooltip hiển thị đầy đủ: Thứ, Giờ, Doanh thu, Sản lượng.
+    Biểu đồ Heatmap giao thoa giữa Thứ trong tuần (Y) và Khung giờ (X).
     """
-    # --- 1. Tổng hợp pivot: hàng = Ngày trong tuần, cột = Giờ ---
-    agg = (
-        df.groupby(["day_name", "hour"], as_index=False)
-        .agg(revenue=("revenue", "sum"), quantity=("quantity", "sum"))
+    hours_range = list(range(6, 21))
+    pivot_rev = (
+        df.pivot_table(
+            index="day_name",
+            columns="hour",
+            values="revenue",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .reindex(index=DAY_ORDER, columns=hours_range, fill_value=0)
     )
 
-    # Pivot thành ma trận 2 chiều
-    pivot_rev = agg.pivot(index="day_name", columns="hour", values="revenue").fillna(0)
-    pivot_qty = agg.pivot(index="day_name", columns="hour", values="quantity").fillna(0)
+    pivot_qty = (
+        df.pivot_table(
+            index="day_name",
+            columns="hour",
+            values="quantity",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .reindex(index=DAY_ORDER, columns=hours_range, fill_value=0)
+    )
 
-    # Sắp xếp hàng theo thứ tự đúng (Mon → Sun)
-    pivot_rev = pivot_rev.reindex([d for d in DAY_ORDER if d in pivot_rev.index])
-    pivot_qty = pivot_qty.reindex([d for d in DAY_ORDER if d in pivot_qty.index])
+    hour_labels = [f"{int(h):02d}h" for h in hours_range]
 
-    # Nhãn trục X (giờ: "07h", "08h", ...)
-    hour_labels = [f"{int(h):02d}h" for h in pivot_rev.columns]
-
-    # --- 2. Vẽ Heatmap ---
-    # customdata: nhúng sản lượng vào từng ô để hiện trong hover
     fig = go.Figure(
-        go.Heatmap(
+        data=go.Heatmap(
             z=pivot_rev.values,
             x=hour_labels,
-            y=list(pivot_rev.index),
+            y=pivot_rev.index.tolist(),
             customdata=pivot_qty.values,
             colorscale=[
-                [0.0,  COLORS["canvas"]],    # thấp nhất = nền tối
-                [0.4,  COLORS["muted_bar"]], # trung bình = xanh đậm
-                [0.75, COLORS["cyan"]],      # khá cao = cyan
-                [1.0,  COLORS["green"]],     # cao nhất = emerald glow
+                [0.0,  COLORS["canvas"]],
+                [0.15, COLORS["card"]],
+                [0.4,  COLORS["muted_bar"]],
+                [0.75, COLORS["cyan"]],
+                [1.0,  COLORS["green"]],
             ],
             hovertemplate=(
                 "<b>%{y} · %{x}</b><br>"
@@ -295,7 +416,6 @@ def plot_sales_heatmap(df: pd.DataFrame):
     fig.update_layout(
         xaxis_title="Khung giờ trong ngày",
         yaxis_title="Ngày trong tuần",
-        # Đảo ngược trục Y để Thứ 2 nằm trên cùng (đọc từ trên xuống tự nhiên hơn)
         yaxis={"autorange": "reversed"},
     )
     return fig
@@ -303,18 +423,8 @@ def plot_sales_heatmap(df: pd.DataFrame):
 
 def plot_trend_over_time(df: pd.DataFrame):
     """
-    [Quốc Thái] Biểu đồ xu hướng doanh thu theo dòng thời gian (Ngày & Tháng).
-
-    - Đầu vào : DataFrame sạch có 'transaction_date', 'month_year', 'revenue'.
-    - Đầu ra  : Figure Plotly (Area chart theo Tháng + Line chart theo Ngày làm nền).
-    - Thông điệp: Theo dõi đà tăng trưởng và tính chu kỳ/mùa vụ của quán cà phê —
-                  trả lời "Doanh thu có xu hướng tăng/giảm theo thời gian không?".
-
-    Thiết kế 2 lớp:
-      · Lớp nền (mờ): đường theo ngày → thấy biến động ngắn hạn.
-      · Lớp nổi (đậm): area chart theo tháng → thấy xu hướng dài hạn rõ ràng.
+    Biểu đồ xu hướng doanh thu theo dòng thời gian (Ngày & Tháng).
     """
-    # --- 1. Tổng hợp theo Ngày ---
     daily = (
         df.groupby("transaction_date", as_index=False)
         .agg(revenue=("revenue", "sum"))
@@ -322,19 +432,15 @@ def plot_trend_over_time(df: pd.DataFrame):
     )
     daily["transaction_date"] = pd.to_datetime(daily["transaction_date"])
 
-    # --- 2. Tổng hợp theo Tháng ---
     monthly = (
         df.groupby("month_year", as_index=False)
         .agg(revenue=("revenue", "sum"))
     )
-    # Chuyển "2023-01" → datetime để sort đúng thứ tự
     monthly["month_dt"] = pd.to_datetime(monthly["month_year"] + "-01")
     monthly = monthly.sort_values("month_dt")
 
-    # --- 3. Vẽ biểu đồ ---
     fig = go.Figure()
 
-    # Lớp 1: Đường doanh thu ngày (mờ, làm nền để thấy dao động)
     fig.add_trace(
         go.Scatter(
             x=daily["transaction_date"],
@@ -347,7 +453,6 @@ def plot_trend_over_time(df: pd.DataFrame):
         )
     )
 
-    # Lớp 2: Area chart doanh thu tháng (nổi bật, là insight chính)
     fig.add_trace(
         go.Scatter(
             x=monthly["month_dt"],
@@ -355,7 +460,7 @@ def plot_trend_over_time(df: pd.DataFrame):
             name="Doanh thu mỗi tháng",
             mode="lines+markers",
             fill="tozeroy",
-            fillcolor="rgba(16, 185, 129, 0.15)",   # green với opacity thấp
+            fillcolor="rgba(16, 185, 129, 0.15)",
             line={"color": COLORS["green"], "width": 2.5},
             marker={"size": 8, "color": COLORS["green"],
                     "line": {"width": 1.5, "color": COLORS["canvas"]}},
@@ -379,9 +484,7 @@ def plot_trend_over_time(df: pd.DataFrame):
         xaxis_title="Thời gian",
         yaxis_title="Doanh thu ($)",
         yaxis={"tickprefix": "$"},
-        # Hiện 2 legend để phân biệt lớp ngày vs tháng
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.02,
                 "xanchor": "right", "x": 1},
     )
     return fig
-

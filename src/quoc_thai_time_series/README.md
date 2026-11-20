@@ -1,31 +1,11 @@
-# Nhiệm vụ: Quốc Thái - Phân tích Doanh thu & Chuỗi thời gian
+# Nhiệm vụ: Quốc Thái - Phân tích Doanh thu & Chuỗi thời gian (ĐÃ HOÀN THÀNH ✅)
 
 ## 👤 Thành viên: Quốc Thái
 - **Vai trò chính:** Phân tích Doanh thu & Viết Báo cáo
-- **Nhiệm vụ (KPI) lõi:** Phân tích chuỗi thời gian. Chịu trách nhiệm tổng hợp và viết báo cáo (Report).
+- **Nhiệm vụ (KPI) lõi:** Trả lời câu hỏi *"Thời điểm nào bán chạy?"* và tổng hợp nội dung Báo cáo (Report).
 
----
-
-## 🎯 Mục tiêu chi tiết (Tuần 1 - Tuần 2)
-1. Sử dụng dữ liệu sạch từ thư mục chung `data/clean/` (do Tân Lê cung cấp).
-2. Trực quan hóa và trả lời trọn vẹn câu hỏi lớn: **"Thời điểm nào bán chạy?"**
-   - Phân tích theo khung giờ trong ngày (nhận diện khung giờ cao điểm).
-   - Phân tích theo các ngày trong tuần (so sánh ngày thường vs cuối tuần).
-   - Thiết lập bản đồ nhiệt (Heatmap) giao thoa Thứ $\times$ Giờ.
-   - Phân tích xu hướng dài hạn theo ngày/tháng (trend, seasonality).
-3. Đóng gói các hàm vẽ biểu đồ Plotly vào `time_series_charts.py` để Tân Lưu nhúng vào Tab 1 của Dashboard.
-4. Tổng hợp số liệu và cùng Tân Lưu viết Báo cáo tổng kết (Report).
-
----
-
-## 📋 Checklist công việc
-
-- [ ] **Bước 1:** Khảo sát dữ liệu chuỗi thời gian trên notebook nháp `notebook/EDA_and_Testing.ipynb`.
-- [ ] **Bước 2:** Hoàn thiện code các hàm trong `time_series_charts.py`:
-  - `plot_hourly_sales(df)`: Biểu đồ doanh thu và lượng ly/đơn theo từng giờ (0h - 23h).
-  - `plot_sales_by_day_of_week(df)`: Biểu đồ doanh thu thứ Hai đến Chủ Nhật.
-  - `plot_sales_heatmap(df)`: Ma trận nhiệt Ngày trong tuần $\times$ Khung giờ.
-  - `plot_trend_over_time(df)`: Biểu đồ diện tích/đường thể hiện xu hướng doanh thu qua thời gian.
-- [ ] **Bước 3:** Bàn giao các hàm này cho Tân Lưu để tích hợp lên Dashboard Streamlit.
-- [ ] **Bước 4:** Soạn thảo báo cáo kết quả phân tích chuỗi thời gian (Report).
-
+## 📋 Checklist Hoàn Thành
+- [x] **Bước 1:** Phân tích xu hướng 6 tháng (`get_monthly_trend_data`, `plot_trend_over_time`) — Phát hiện mức tăng trưởng +103.8% từ Tháng 1 ($81,678) lên Tháng 6 ($166,486).
+- [x] **Bước 2:** Phân tích khung giờ (`get_hourly_sales_data`, `plot_hourly_sales`) — Phát hiện khung giờ vàng 07h–10h sáng chiếm 45.80% tổng doanh thu.
+- [x] **Bước 3:** Phân tích thứ trong tuần (`get_weekly_sales_data`, `plot_sales_by_day_of_week`) — Thứ Hai ($101,677) và Thứ Sáu ($101,373) cao nhất tuần.
+- [x] **Bước 4:** Xây dựng Ma trận nhiệt (`get_heatmap_data`, `plot_sales_heatmap`) và bàn giao báo cáo tổng kết trong `README.md`.
